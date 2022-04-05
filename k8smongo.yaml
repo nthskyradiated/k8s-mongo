@@ -1,0 +1,120 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: mongodev
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mymongosecret
+  namespace: mongodev
+type: Opaque
+data:
+  mymongouser: YWRtaW4=
+  mymongopw: UEBzc3cwcmQxMQ==
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: mongodev
+  name: mongoexcfgmap
+data:
+  db_host: mymongoservice
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mymongo
+  namespace: mongodev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mymongo
+  template:
+    metadata:
+      labels:
+        app: mymongo
+    spec:
+      containers:
+      - name: mymongo
+        image: mongo
+        ports:
+        - containerPort: 27017
+        env:
+          - name: MONGO_INITDB_ROOT_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: mymongosecret
+                key: mymongouser
+          - name: MONGO_INITDB_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mymongosecret
+                key: mymongopw
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mymongoservice
+  namespace: mongodev
+spec:
+  selector:
+    app: mymongo
+  ports:
+  - protocol: TCP
+    port: 27017
+    targetPort: 27017
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mymongoex
+  namespace: mongodev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mymongoex
+  template:
+    metadata:
+      labels:
+        app: mymongoex
+    spec:
+      containers:
+      - name: mymongoex
+        image: mongo-express:0.54
+        ports:
+        - containerPort: 8081
+        env:
+          - name: ME_CONFIG_MONGODB_ADMINUSERNAME
+            valueFrom:
+              secretKeyRef:
+                name: mymongosecret
+                key: mymongouser
+          - name: ME_CONFIG_MONGODB_ADMINPASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mymongosecret
+                key: mymongopw
+          - name: ME_CONFIG_MONGODB_SERVER
+            valueFrom:
+              configMapKeyRef:
+                name: mongoexcfgmap
+                key: db_host
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: mongodev
+  name: mymongoexsvc
+spec:
+  type: LoadBalancer
+  selector:
+    app: mymongoex
+  ports:
+  - port: 8081
+    targetPort: 8081
